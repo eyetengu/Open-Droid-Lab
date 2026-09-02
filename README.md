@@ -15,11 +15,9 @@ The weekly schedule is intended to show regular public progress, lessons, code, 
 You can get involved or follow along by watching, reading, cloning the repo, comment and mimic the steps that I take.
 I would encourage you to participate in the process rather than treat this as disposable content. Writing your own thoughts as you follow along will only benefit you in your growth.
 
-Boundaries
 The pace is intended to be a stepwise process where we begin with a plan for the week, physical build & code progress with the intention of having a working product by weeks end.
 I will NOT provide 1-on-1 support, a finished commercial product at this level.
 Respectful comments of those who are honestly trying to learn the content and understand the deeper lessons will be given priority with rude/demeaning comments will not receive any kind of priority.
 We aim to develop SOLUTIONS… NOT create more problems, consternation or drama
 
-closing line
 They say that a rising tide raises all ships. Let’s raise that tide together.
