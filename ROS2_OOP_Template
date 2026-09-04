@@ -1,0 +1,73 @@
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Bool
+import json
+
+import paho.mqtt.client as mqtt
+
+# ====================== CONFIG ======================
+MQTT_BROKER = "xxx.xxx.x.xx"
+MQTT_PORT = 1883
+MQTT_TOPIC = "/sensor/pir"
+
+ROS2_TOPIC = "/pir_state"
+# ====================================================
+
+
+class PIRNode(Node):
+
+    def __init__(self):
+        super().__init__('pir_node')
+
+        # ROS2 publisher
+        self.publisher = self.create_publisher(Bool, ROS2_TOPIC, 10)
+
+        # MQTT client
+        self.client = mqtt.Client()
+
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
+
+        self.client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        self.client.loop_start()
+
+    # ---------------- MQTT CALLBACKS ----------------
+
+    def on_connect(self, client, userdata, flags, rc):
+        client.subscribe(MQTT_TOPIC)
+
+    def on_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode())
+
+            state = payload.get("state", 0)
+
+            ros_msg = Bool()
+            ros_msg.data = bool(state)
+
+            self.publisher.publish(ros_msg)
+
+        except Exception as e:
+            self.get_logger().error(f"Parse error: {str(e)}")
+
+
+# ---------------- MAIN ----------------
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    node = PIRNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+
+
