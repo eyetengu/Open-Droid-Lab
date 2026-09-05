@@ -1,0 +1,56 @@
+# ============================================================
+# MQTT / Wi-Fi INSERT for ODL bare-bones node
+# Drop these pieces into the template. Nothing else is changed.
+# (Use this when the MCU is talking over Wi-Fi instead of USB serial)
+# ============================================================
+
+# 1. ADD THESE IMPORTS (top of file)
+from std_msgs.msg import Bool
+import json
+import paho.mqtt.client as mqtt
+
+# 2. ADD THESE CONFIG LINES (module level, after imports)
+MQTT_BROKER = "192.168.1.100"   # change to your broker IP or hostname
+MQTT_PORT   = 1883
+MQTT_TOPIC  = "/sensor/pir"     # topic the ESP32 / MCU publishes to
+ROS2_TOPIC  = "/pir_state"      # ROS 2 topic we publish on
+
+# 3. ADD THESE LINES INSIDE __init__  (right after super().__init__(...))
+        self.publisher_ = self.create_publisher(Bool, ROS2_TOPIC, 10)
+
+        self.client = mqtt.Client()
+        self.client.on_connect = self._on_connect
+        self.client.on_message = self._on_message
+
+        try:
+            self.client.connect(MQTT_BROKER, MQTT_PORT, 60)
+            self.client.loop_start()          # non-blocking background thread
+            self.get_logger().info(f'MQTT connecting to {MQTT_BROKER}:{MQTT_PORT}')
+        except Exception as e:
+            self.get_logger().error(f'MQTT connect failed: {e}')
+
+# 4. ADD THESE TWO METHODS TO THE CLASS
+    def _on_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            self.get_logger().info('MQTT connected')
+            client.subscribe(MQTT_TOPIC)
+        else:
+            self.get_logger().error(f'MQTT connect returned code {rc}')
+
+    def _on_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode())
+            # Expected simple JSON from the MCU, e.g. {"state": 1} or {"state": 0}
+            state = payload.get("state", 0)
+
+            ros_msg = Bool()
+            ros_msg.data = bool(state)
+            self.publisher_.publish(ros_msg)
+            self.get_logger().info(f'Published {ROS2_TOPIC} = {ros_msg.data}')
+        except Exception as e:
+            self.get_logger().error(f'MQTT parse error: {e} | raw: {msg.payload!r}')
+
+# 5. ADD THIS INSIDE the finally block of main() (before destroy_node)
+        if hasattr(node, 'client'):
+            node.client.loop_stop()
+            node.client.disconnect()
