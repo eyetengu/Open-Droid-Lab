@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""
+Open Droid Lab — Bare-bones ROS 2 Python Node Template (OOP)
+
+This is the chassis only.
+No publishers, no subscribers, no serial, no MQTT.
+Everything else is added later as focused inserts.
+
+Teaching intent:
+  Show the skeleton so students can see lifecycle, logging,
+  and where future behavior will live — without clutter.
+"""
+
+import rclpy
+from rclpy.node import Node
+
+
+class ODLNode(Node):
+    """Minimal object-oriented ROS 2 node for Open Droid Lab."""
+
+    def __init__(self):
+        # Node name appears in `ros2 node list` and the graph
+        super().__init__('odl_node')
+
+        self.get_logger().info('ODL bare-bones node started')
+
+        # Optional: a slow heartbeat so you can see the node is alive
+        # while teaching. Remove or comment out once real work is added.
+        self._heartbeat = self.create_timer(5.0, self._heartbeat_callback)
+
+    def _heartbeat_callback(self):
+        self.get_logger().info('heartbeat')
+
+    # ------------------------------------------------------------------
+    # Future inserts go here (or in methods called from __init__)
+    #   - serial reader
+    #   - publisher / subscriber
+    #   - MQTT client
+    #   - behavior logic
+    # ------------------------------------------------------------------
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ODLNode()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.get_logger().info('Shutting down')
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
