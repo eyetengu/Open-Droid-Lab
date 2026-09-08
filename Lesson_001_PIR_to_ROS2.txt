@@ -7,12 +7,12 @@ Get one real sensor talking to ROS2 with the least amount of magic possible.
 Arduino Nano + PIR sensor → serial → Raspberry Pi → ROS2 topic.
 When this works, you have a clean, repeatable pattern you can reuse for almost any sensor.
 
-What I Am Using:
-- Laptop running Ubuntu/Jazzy and using Visual Studio Code to port into the Droid Brain
+What I Am Using
+- Laptop running Ubuntu + ROS 2 Jazzy, with VS Code remote into the Droid Brain
 - Arduino Nano (or compatible)
 - PIR motion sensor (HC-SR501 or similar)
-- Droid Brain- Ubuntu Server Lite + Raspberry Pi running ROS2 (Jazzy)
-- USB cable between Nano and Pi
+- Droid Brain: Ubuntu Server Lite on Raspberry Pi running ROS 2 Jazzy
+- USB cable (Nano → Pi, via hub if needed)
 - Jumper wires
 
 Wiring (Nano side)
@@ -20,13 +20,14 @@ PIR VCC  → Nano 5V
 PIR GND  → Nano GND
 PIR OUT  → Nano D2
 
-That’s it. Three wires.
+Three wires. That’s the whole hardware side for this lesson.
 
+==================================================
 Nano Sketch (final version)
-Upload this to the Nano. Baud rate is 115200. 
-It prints a simple, parseable line every time the state is read.
+==================================================
+Upload this to the Nano. Baud rate is 115200.
+It only prints when the state actually changes.
 
-===== The MCU Sketch(Nano) =====
 const int pirPin = 2;
 const int ledPin = 13;
 int lastState = LOW;
@@ -34,13 +35,11 @@ int lastState = LOW;
 void setup() {
   pinMode(pirPin, INPUT);
   pinMode(ledPin, OUTPUT);
-
   Serial.begin(115200);
-
   digitalWrite(ledPin, LOW);
-  delay(2000);
+  delay(2000);                        // let the PIR settle
 
-  // Establish the initial state after the PIR settles.
+  // Send the initial state once
   lastState = digitalRead(pirPin);
   Serial.print("MOTION:");
   Serial.println(lastState);
@@ -51,29 +50,24 @@ void loop() {
 
   if (currentState != lastState) {
     digitalWrite(ledPin, currentState);
-
     Serial.print("MOTION:");
     Serial.println(currentState);
-
     lastState = currentState;
   }
 
   delay(50);
 }
 
-===============
-
-The important part is the serial format. 
-Keep it dead simple and consistent. 
-Example that works:
+Serial format is deliberately simple and consistent:
 MOTION:1
 MOTION:0
 
-or whatever exact string your current sketch is sending. 
 Do not get fancy yet.
 
-ROS2 Side
-We use a small Python node that:
+==================================================
+ROS 2 Node
+==================================================
+Small Python node that:
 1. Opens the serial port
 2. Reads lines
 3. Publishes std_msgs/Bool on /pir_state
@@ -81,7 +75,6 @@ We use a small Python node that:
 #!/usr/bin/env python3
 """
 Open Droid Lab — PIR Serial Reader Lesson
-
 Built from:
   - Basic_OOP_Template
   - ROS2Node_02_Insert_SERIAL
@@ -92,61 +85,36 @@ and publishes the state on /pir_state.
 
 import rclpy
 from rclpy.node import Node
-
 from std_msgs.msg import Bool
 import serial
 import serial.tools.list_ports
 
-
-SERIAL_PORT = '/dev/ttyUSB0'
+SERIAL_PORT = '/dev/ttyUSB0'   # change if needed
 BAUD_RATE = 115200
 
-===== ROS2 PIR Node =====
 
 class ODLNode(Node):
     """Open Droid Lab PIR serial-reader node."""
 
     def __init__(self):
         super().__init__('odl_node')
-
         self.get_logger().info('ODL PIR node started')
 
-        self.publisher_ = self.create_publisher(
-            Bool,
-            '/pir_state',
-            10
-        )
+        self.publisher_ = self.create_publisher(Bool, '/pir_state', 10)
 
         self.ser = None
         self._open_serial()
 
-        self.create_timer(
-            0.05,
-            self._serial_timer_callback
-        )
+        self.create_timer(0.05, self._serial_timer_callback)
 
     def _open_serial(self):
         try:
-            self.ser = serial.Serial(
-                SERIAL_PORT,
-                BAUD_RATE,
-                timeout=0.01
-            )
-
-            self.get_logger().info(
-                f'Serial opened: {SERIAL_PORT} @ {BAUD_RATE}'
-            )
-
+            self.ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.01)
+            self.get_logger().info(f'Serial opened: {SERIAL_PORT} @ {BAUD_RATE}')
         except serial.SerialException as e:
-            self.get_logger().error(
-                f'Could not open {SERIAL_PORT}: {e}'
-            )
-
+            self.get_logger().error(f'Could not open {SERIAL_PORT}: {e}')
             for p in serial.tools.list_ports.comports():
-                self.get_logger().info(
-                    f'  {p.device} — {p.description}'
-                )
-
+                self.get_logger().info(f'  {p.device} — {p.description}')
             self.ser = None
 
     def _serial_timer_callback(self):
@@ -156,67 +124,40 @@ class ODLNode(Node):
         try:
             while self.ser.in_waiting > 0:
                 raw = self.ser.readline()
-
                 if not raw:
                     break
-
-                line = raw.decode(
-                    'utf-8',
-                    errors='ignore'
-                ).strip()
-
+                line = raw.decode('utf-8', errors='ignore').strip()
                 if line:
                     self._handle_line(line)
-
         except serial.SerialException as e:
-            self.get_logger().error(
-                f'Serial read error: {e}'
-            )
+            self.get_logger().error(f'Serial read error: {e}')
             self.ser = None
 
     def _handle_line(self, line: str):
         if line.startswith('MOTION:'):
             try:
-                value = int(
-                    line.split(':', 1)[1]
-                )
-
+                value = int(line.split(':', 1)[1])
                 msg = Bool()
                 msg.data = bool(value)
-
                 self.publisher_.publish(msg)
-
-                self.get_logger().info(
-                    f'Published /pir_state = {msg.data}'
-                )
-
+                self.get_logger().info(f'Published /pir_state = {msg.data}')
             except (ValueError, IndexError):
-                self.get_logger().warn(
-                    f'Bad MOTION line: {line!r}'
-                )
-
+                self.get_logger().warn(f'Bad MOTION line: {line!r}')
         else:
-            self.get_logger().debug(
-                f'MCU: {line}'
-            )
+            self.get_logger().debug(f'MCU: {line}')
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = ODLNode()
-
     try:
         rclpy.spin(node)
-
     except KeyboardInterrupt:
         pass
-
     finally:
         node.get_logger().info('Shutting down')
-
         if node.ser is not None and node.ser.is_open:
             node.ser.close()
-
         node.destroy_node()
         rclpy.shutdown()
 
@@ -224,12 +165,11 @@ def main(args=None):
 if __name__ == '__main__':
     main()
 
-====================
-
-
+==================================================
 How to run it
-1. Plug the Nano into the Droid Brain via usb hub
-2. Note the serial port (usually /dev/ttyUSB0 or /dev/ttyACM0)
+==================================================
+1. Plug the Nano into the Droid Brain (USB hub is fine)
+2. Confirm the serial port (usually /dev/ttyUSB0 or /dev/ttyACM0)
 3. Build and source your workspace
 4. Run the node
 5. In another terminal:
@@ -237,6 +177,7 @@ How to run it
 
 Wave your hand in front of the PIR.
 You should see:
+
 data: true
 ---
 data: false
@@ -254,10 +195,10 @@ This is the core pattern for Open Droid Lab:
 Sensor → MCU → Serial (or later wireless) → ROS2 topic → behavior
 
 Common problems and fixes
-- No data on echo: check the serial port name and baud rate
-- Topic exists but never changes: PIR sensitivity / timing jumper, or sketch not printing
-- Permission denied on serial: add your user to the dialout group and re-login
-- Garbled serial: baud rate mismatch
+- No data on echo          → check serial port name and baud rate
+- Topic exists but never changes → PIR sensitivity / timing jumper, or sketch not printing
+- Permission denied on serial → add your user to the dialout group, then log out/in
+- Garbled serial           → baud rate mismatch
 
 What you should take away
 You now have a working, minimal, reproducible sensor-to-ROS2 path.
