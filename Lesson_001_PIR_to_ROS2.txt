@@ -1,0 +1,270 @@
+LESSON 01
+Single Sensor → ROS2 Serial
+PIR Motion to /pir_state
+
+Goal
+Get one real sensor talking to ROS2 with the least amount of magic possible.
+Arduino Nano + PIR sensor → serial → Raspberry Pi → ROS2 topic.
+When this works, you have a clean, repeatable pattern you can reuse for almost any sensor.
+
+What I Am Using:
+- Laptop running Ubuntu/Jazzy and using Visual Studio Code to port into the Droid Brain
+- Arduino Nano (or compatible)
+- PIR motion sensor (HC-SR501 or similar)
+- Droid Brain- Ubuntu Server Lite + Raspberry Pi running ROS2 (Jazzy)
+- USB cable between Nano and Pi
+- Jumper wires
+
+Wiring (Nano side)
+PIR VCC  → Nano 5V
+PIR GND  → Nano GND
+PIR OUT  → Nano D2
+
+That’s it. Three wires.
+
+Nano Sketch (final version)
+Upload this to the Nano. Baud rate is 115200. 
+It prints a simple, parseable line every time the state is read.
+
+===== The MCU Sketch(Nano) =====
+const int pirPin = 2;
+const int ledPin = 13;
+int lastState = LOW;
+
+void setup() {
+  pinMode(pirPin, INPUT);
+  pinMode(ledPin, OUTPUT);
+
+  Serial.begin(115200);
+
+  digitalWrite(ledPin, LOW);
+  delay(2000);
+
+  // Establish the initial state after the PIR settles.
+  lastState = digitalRead(pirPin);
+  Serial.print("MOTION:");
+  Serial.println(lastState);
+}
+
+void loop() {
+  int currentState = digitalRead(pirPin);
+
+  if (currentState != lastState) {
+    digitalWrite(ledPin, currentState);
+
+    Serial.print("MOTION:");
+    Serial.println(currentState);
+
+    lastState = currentState;
+  }
+
+  delay(50);
+}
+
+===============
+
+The important part is the serial format. 
+Keep it dead simple and consistent. 
+Example that works:
+MOTION:1
+MOTION:0
+
+or whatever exact string your current sketch is sending. 
+Do not get fancy yet.
+
+ROS2 Side
+We use a small Python node that:
+1. Opens the serial port
+2. Reads lines
+3. Publishes std_msgs/Bool on /pir_state
+
+#!/usr/bin/env python3
+"""
+Open Droid Lab — PIR Serial Reader Lesson
+
+Built from:
+  - Basic_OOP_Template
+  - ROS2Node_02_Insert_SERIAL
+
+Reads MOTION:0 / MOTION:1 from an Arduino Nano
+and publishes the state on /pir_state.
+"""
+
+import rclpy
+from rclpy.node import Node
+
+from std_msgs.msg import Bool
+import serial
+import serial.tools.list_ports
+
+
+SERIAL_PORT = '/dev/ttyUSB0'
+BAUD_RATE = 115200
+
+===== ROS2 PIR Node =====
+
+class ODLNode(Node):
+    """Open Droid Lab PIR serial-reader node."""
+
+    def __init__(self):
+        super().__init__('odl_node')
+
+        self.get_logger().info('ODL PIR node started')
+
+        self.publisher_ = self.create_publisher(
+            Bool,
+            '/pir_state',
+            10
+        )
+
+        self.ser = None
+        self._open_serial()
+
+        self.create_timer(
+            0.05,
+            self._serial_timer_callback
+        )
+
+    def _open_serial(self):
+        try:
+            self.ser = serial.Serial(
+                SERIAL_PORT,
+                BAUD_RATE,
+                timeout=0.01
+            )
+
+            self.get_logger().info(
+                f'Serial opened: {SERIAL_PORT} @ {BAUD_RATE}'
+            )
+
+        except serial.SerialException as e:
+            self.get_logger().error(
+                f'Could not open {SERIAL_PORT}: {e}'
+            )
+
+            for p in serial.tools.list_ports.comports():
+                self.get_logger().info(
+                    f'  {p.device} — {p.description}'
+                )
+
+            self.ser = None
+
+    def _serial_timer_callback(self):
+        if self.ser is None or not self.ser.is_open:
+            return
+
+        try:
+            while self.ser.in_waiting > 0:
+                raw = self.ser.readline()
+
+                if not raw:
+                    break
+
+                line = raw.decode(
+                    'utf-8',
+                    errors='ignore'
+                ).strip()
+
+                if line:
+                    self._handle_line(line)
+
+        except serial.SerialException as e:
+            self.get_logger().error(
+                f'Serial read error: {e}'
+            )
+            self.ser = None
+
+    def _handle_line(self, line: str):
+        if line.startswith('MOTION:'):
+            try:
+                value = int(
+                    line.split(':', 1)[1]
+                )
+
+                msg = Bool()
+                msg.data = bool(value)
+
+                self.publisher_.publish(msg)
+
+                self.get_logger().info(
+                    f'Published /pir_state = {msg.data}'
+                )
+
+            except (ValueError, IndexError):
+                self.get_logger().warn(
+                    f'Bad MOTION line: {line!r}'
+                )
+
+        else:
+            self.get_logger().debug(
+                f'MCU: {line}'
+            )
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ODLNode()
+
+    try:
+        rclpy.spin(node)
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        node.get_logger().info('Shutting down')
+
+        if node.ser is not None and node.ser.is_open:
+            node.ser.close()
+
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
+
+====================
+
+
+How to run it
+1. Plug the Nano into the Droid Brain via usb hub
+2. Note the serial port (usually /dev/ttyUSB0 or /dev/ttyACM0)
+3. Build and source your workspace
+4. Run the node
+5. In another terminal:
+   ros2 topic echo /pir_state
+
+Wave your hand in front of the PIR.
+You should see:
+data: true
+---
+data: false
+---
+
+That is the entire pipeline working.
+
+What just happened
+- A physical event (motion) became a digital signal
+- That signal became a serial string
+- That string became a ROS2 message
+- Other nodes can now subscribe to /pir_state without caring how the sensor is wired
+
+This is the core pattern for Open Droid Lab:
+Sensor → MCU → Serial (or later wireless) → ROS2 topic → behavior
+
+Common problems and fixes
+- No data on echo: check the serial port name and baud rate
+- Topic exists but never changes: PIR sensitivity / timing jumper, or sketch not printing
+- Permission denied on serial: add your user to the dialout group and re-login
+- Garbled serial: baud rate mismatch
+
+What you should take away
+You now have a working, minimal, reproducible sensor-to-ROS2 path.
+Everything else (OLED status, more sensors, wireless, behaviors) builds on this exact pattern.
+
+Next
+Lesson 02 will take a ROS2 decision and drive something physical (actuator, display, or both) back out over serial.
+Same simplicity. Opposite direction.
+
+End of Lesson 01
