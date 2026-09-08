@@ -5,7 +5,7 @@
   for the ROS2 / Raspberry Pi side.
 */
 
-#define PIR_PIN 4
+#define PIR_PIN 2
 
 bool lastState = false;
 unsigned long lastChange = 0;
