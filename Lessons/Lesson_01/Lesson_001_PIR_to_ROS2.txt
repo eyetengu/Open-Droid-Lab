@@ -1,4 +1,25 @@
 LESSON 01
+
+What you will have when you finish
+- A physical PIR sensor on an Arduino Nano that publishes clean true/false motion data onto a ROS 2 topic. 
+- You will be able to see the state change with ros2 topic echo.
+
+Parts Required
+- arduino Nano (and opt. terminal socket)
+- pir sensor
+- 3 dupont wires(m - f)
+- pi5(or rpi500) with Ubuntu Server Lite + ROS2 JAZZY
+- USB Cable
+- USB HUB(optional but super useful)
+
+Time To Complete
+- about 15 min to assemble the mcu/sensor module
+- uploading the sketch should take minimal time
+- creating the ROS2 package, creating the node and adding entry points should take less than 30 minutes assuming you are familiar with this process
+
+Proof it works
+- The photos and short video in this folder show the exact build and the topic updating live.
+
 Single Sensor → ROS2 Serial
 PIR Motion to /pir_state
 
