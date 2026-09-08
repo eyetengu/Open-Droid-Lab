@@ -188,11 +188,15 @@ if __name__ == '__main__':
 ==================================================
 How to run it
 ==================================================
-1. Plug the Nano into the Droid Brain (USB hub is fine)
-2. Confirm the serial port (usually /dev/ttyUSB0 or /dev/ttyACM0)
-3. Build and source your workspace
-4. Run the node
-5. In another terminal:
+1. Upload the sketch to the Nano (baud 115200).
+2. Plug the Nano into the Droid Brain (USB hub is fine).
+3. On the Pi, confirm the serial port:
+   ls /dev/ttyUSB* /dev/ttyACM*
+   (usually /dev/ttyUSB0 or /dev/ttyACM0)
+4. If needed, edit SERIAL_PORT in the node to match.
+5. Build and source your workspace.
+6. Run the node.
+7. In a second terminal:
    ros2 topic echo /pir_state
 
 Wave your hand in front of the PIR.
@@ -204,6 +208,8 @@ data: false
 ---
 
 That is the entire pipeline working.
+
+===================================================
 
 What just happened
 - A physical event (motion) became a digital signal
