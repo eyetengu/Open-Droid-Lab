@@ -1,0 +1,3 @@
+in this lesson we will discuss the pinmap for the ultrasonic sensor in conjunction with the Arduino Nano mcu
+we will use serial communication with the droid brain
+the format will be Distance: xxxx
