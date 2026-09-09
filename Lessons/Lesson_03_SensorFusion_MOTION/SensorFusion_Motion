@@ -1,0 +1,1 @@
+This will be the sensor fusion node which will bring the raw data from the pir and the rcwl sensors together and send it out on the topic: motion(?)
